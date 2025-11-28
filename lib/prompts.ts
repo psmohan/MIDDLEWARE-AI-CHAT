@@ -20,5 +20,5 @@ export function buildMemoryPrompt(
 }
 
 export function buildPersonalityPrompt(memorySummary: string) {
-  return `Based only on the memory summary below, write a concise user personality profile (3-6 bullet points and a short paragraph). Be objective and do not invent facts. Memory:\n${memorySummary}`;
+  return `Based only on the memory summary below, write a concise user personality profile (3-6 bullet points and a short paragraph). Be objective and do not invent facts. (If no much information just write his name enough, dont forget points) Memory:\n${memorySummary}`;
 }

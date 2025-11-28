@@ -19,6 +19,32 @@ const SELF_TRIGGERS = [
   "what did you learn about me",
 ];
 
+async function updateMemoryIfNeeded(userId: string) {
+  const { data: msgs } = await getSupabaseServiceClient()
+    .from("messages")
+    .select("role, content")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (!msgs) return;
+
+  const userMsgCount = msgs.filter((m) => m.role === "user").length;
+
+  if (userMsgCount >= 5) {
+    await fetch(
+      `${
+        process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+      }/api/update-memory`,
+      {
+        method: "POST",
+        body: JSON.stringify({ userId }),
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = getSupabaseServiceClient();
@@ -29,6 +55,8 @@ export async function POST(req: Request) {
     await supabase
       .from("messages")
       .insert([{ user_id: userId, role: "user", content: message }]);
+
+    updateMemoryIfNeeded(userId).catch(console.error);
 
     const isSelfQuery = SELF_TRIGGERS.some((t) =>
       message.toLowerCase().includes(t)
@@ -51,38 +79,41 @@ export async function POST(req: Request) {
       .eq("user_id", userId)
       .limit(1);
 
-    const memorySummary = memRows?.[0]?.summary ?? null;
+    let memorySummary = memRows?.[0]?.summary ?? null;
 
     let messagesForLLM: ChatCompletionMessageParam[] = [];
 
-    // if (isSelfQuery) {
-    // if (!memorySummary) {
-    //   const reply =
-    //     "I don't have enough history to create a profile yet — chat more and I'll learn about you.";
-    //   await supabase
-    //     .from("messages")
-    //     .insert([{ user_id: userId, role: "assistant", content: reply }]);
-    //   return NextResponse.json({ reply });
-    // }
+    if (isSelfQuery) {
+      memorySummary = memRows?.[0]?.summary ?? null;
+      if (!memorySummary) {
+        const updateRes = await fetch(
+          `${
+            process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+          }/api/update-memory`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId }),
+          }
+        );
 
-    // const prompt = buildPersonalityPrompt(memorySummary);
-    // messagesForLLM = [
-    //   { role: "system", content: "You are a helpful assistant." },
-    //   { role: "user", content: prompt },
-    // ];
-    // } else {
-    //   const prompt = buildChatPrompt(memorySummary, recentMessages.slice(-10));
-    //   messagesForLLM = [
-    //     { role: "system", content: "You are a helpful assistant." },
-    //     { role: "user", content: prompt },
-    //   ];
-    // }
+        const { summary } = await updateRes.json();
+        memorySummary = summary;
+      }
 
-    const prompt = buildChatPrompt(memorySummary, recentMessages.slice(-10));
-    messagesForLLM = [
-      { role: "system", content: "You are a helpful assistant." },
-      { role: "user", content: prompt },
-    ];
+      const prompt = buildPersonalityPrompt(memorySummary);
+
+      messagesForLLM = [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: prompt },
+      ];
+    } else {
+      const prompt = buildChatPrompt(memorySummary, recentMessages.slice(-10));
+      messagesForLLM = [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: prompt },
+      ];
+    }
 
     const responseText = await callGroqSystem(messagesForLLM);
     const reply = responseText.trim();
