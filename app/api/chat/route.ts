@@ -1,7 +1,7 @@
 // app/api/chat/route.ts
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabase } from "../../../lib/supabaseClient";
+import { getSupabaseServiceClient } from "@/lib/supabaseClient";
 import { callGroqSystem } from "../../../lib/groqClient";
 import { buildChatPrompt, buildPersonalityPrompt } from "../../../lib/prompts";
 import { ChatCompletionMessageParam } from "groq-sdk/resources/chat.mjs";
@@ -21,6 +21,7 @@ const SELF_TRIGGERS = [
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabaseServiceClient();
     const json = await req.json();
     const parsed = bodySchema.parse(json);
     const { userId, message } = parsed;

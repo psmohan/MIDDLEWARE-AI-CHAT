@@ -1,7 +1,7 @@
 // app/api/update-memory/route.ts
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabase } from "../../../lib/supabaseClient";
+import { getSupabaseServiceClient } from "@/lib/supabaseClient";
 import { callGroqSystem } from "../../../lib/groqClient";
 import { buildMemoryPrompt } from "../../../lib/prompts";
 import { ChatCompletionMessageParam } from "groq-sdk/resources/chat.mjs";
@@ -12,6 +12,8 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabaseServiceClient();
+
     const json = await req.json();
     const { userId } = bodySchema.parse(json);
 
